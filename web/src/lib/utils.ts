@@ -13,6 +13,7 @@ import {
   getAssetOriginalPath,
   getAssetPlaybackPath,
   getAssetThumbnailPath,
+  getAssetVideoPreviewPath,
   getBaseUrl,
   getPeopleThumbnailPath,
   getUserProfileImagePath,
@@ -207,6 +208,14 @@ export const getAssetPlaybackUrl = (options: string | AssetUrlOptions) => {
   }
   const { id, cacheKey } = options;
   return createUrl(getAssetPlaybackPath(id), { ...authManager.params, c: cacheKey });
+};
+
+export const getAssetVideoPreviewUrl = (options: string | AssetUrlOptions) => {
+  if (typeof options === 'string') {
+    options = { id: options };
+  }
+  const { id, cacheKey } = options;
+  return createUrl(getAssetVideoPreviewPath(id), { key: authManager.key, c: cacheKey });
 };
 
 export const getProfileImageUrl = (user: UserResponseDto) =>

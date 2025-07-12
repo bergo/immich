@@ -21,7 +21,7 @@ import {
   UploadFieldName,
 } from 'src/dtos/asset-media.dto';
 import { AuthDto } from 'src/dtos/auth.dto';
-import { AssetStatus, AssetType, AssetVisibility, CacheControl, JobName, Permission, StorageFolder } from 'src/enum';
+import { AssetPathType, AssetStatus, AssetType, AssetVisibility, CacheControl, JobName, Permission, StorageFolder } from 'src/enum';
 import { AuthRequest } from 'src/middleware/auth.guard';
 import { BaseService } from 'src/services/base.service';
 import { UploadFile } from 'src/types';
@@ -254,6 +254,7 @@ export class AssetMediaService extends BaseService {
       throw new BadRequestException('Asset is not a video');
     }
 
+    // Always serve the original or encoded video for full video viewing
     const filepath = asset.encodedVideoPath || asset.originalPath;
 
     return new ImmichFileResponse({
@@ -261,6 +262,50 @@ export class AssetMediaService extends BaseService {
       contentType: mimeTypes.lookup(filepath),
       cacheControl: CacheControl.PrivateWithCache,
     });
+  }
+
+  async playbackVideoPreview(auth: AuthDto, id: string): Promise<ImmichFileResponse> {
+    await this.requireAccess({ auth, permission: Permission.ASSET_VIEW, ids: [id] });
+
+    const asset = await this.findOrFail(id);
+
+    if (asset.type !== AssetType.VIDEO) {
+      throw new BadRequestException('Asset is not a video');
+    }
+
+    // Check for custom video preview first (if feature is enabled)
+    const { ffmpeg, image } = await this.getConfig({ withCache: true });
+    if (ffmpeg.customVideoPreview) {
+      const videoPreviewPath = await this.getVideoPreviewPath(asset, image);
+      if (videoPreviewPath && await this.storageRepository.checkFileExists(videoPreviewPath)) {
+        return new ImmichFileResponse({
+          path: videoPreviewPath,
+          contentType: mimeTypes.lookup(videoPreviewPath),
+          cacheControl: CacheControl.PRIVATE_WITH_CACHE,
+        });
+      }
+    }
+
+    // Fall back to encoded video or original if preview not available
+    const filepath = asset.encodedVideoPath || asset.originalPath;
+
+    return new ImmichFileResponse({
+      path: filepath,
+      contentType: mimeTypes.lookup(filepath),
+      cacheControl: CacheControl.PRIVATE_WITH_CACHE,
+    });
+  }
+
+  private async getVideoPreviewPath(asset: Asset, imageConfig: any): Promise<string | null> {
+    try {
+      // Calculate the video preview path based on the same logic used in generateCustomVideoPreview
+      const previewPath = StorageCore.getImagePath(asset, AssetPathType.PREVIEW, imageConfig.preview.format);
+      const previewDir = previewPath.substring(0, previewPath.lastIndexOf('/'));
+      const previewBaseName = previewPath.substring(previewPath.lastIndexOf('/') + 1, previewPath.lastIndexOf('.'));
+      return `${previewDir}/${previewBaseName}.mp4`;
+    } catch {
+      return null;
+    }
   }
 
   async checkExistingAssets(

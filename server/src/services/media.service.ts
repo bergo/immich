@@ -422,18 +422,24 @@ export class MediaService extends BaseService {
     }
     const mainAudioStream = this.getMainStream(audioStreams);
 
-    const previewConfig = ThumbnailConfig.create({ ...ffmpeg, targetResolution: image.preview.size.toString() });
-    const thumbnailConfig = ThumbnailConfig.create({ ...ffmpeg, targetResolution: image.thumbnail.size.toString() });
-    const previewOptions = previewConfig.getCommand(TranscodeTarget.Video, mainVideoStream, mainAudioStream, format);
-    const thumbnailOptions = thumbnailConfig.getCommand(
-      TranscodeTarget.Video,
-      mainVideoStream,
-      mainAudioStream,
-      format,
-    );
+    if (ffmpeg.customVideoPreview && format.duration) {
+      // Generate video preview using time shift logic
+      await this.generateCustomVideoPreview(asset, format, mainVideoStream, mainAudioStream, previewPath, thumbnailPath, image, ffmpeg);
+    } else {
+      // Default thumbnail generation
+      const previewConfig = ThumbnailConfig.create({ ...ffmpeg, targetResolution: image.preview.size.toString() });
+      const thumbnailConfig = ThumbnailConfig.create({ ...ffmpeg, targetResolution: image.thumbnail.size.toString() });
+      const previewOptions = previewConfig.getCommand(TranscodeTarget.Video, mainVideoStream, mainAudioStream, format);
+      const thumbnailOptions = thumbnailConfig.getCommand(
+        TranscodeTarget.Video,
+        mainVideoStream,
+        mainAudioStream,
+        format,
+      );
 
-    await this.mediaRepository.transcode(asset.originalPath, previewPath, previewOptions);
-    await this.mediaRepository.transcode(asset.originalPath, thumbnailPath, thumbnailOptions);
+      await this.mediaRepository.transcode(asset.originalPath, previewPath, previewOptions);
+      await this.mediaRepository.transcode(asset.originalPath, thumbnailPath, thumbnailOptions);
+    }
 
     const thumbhash = await this.mediaRepository.generateThumbhash(previewPath, {
       colorspace: image.colorspace,
@@ -443,8 +449,142 @@ export class MediaService extends BaseService {
     return { previewPath, thumbnailPath, thumbhash };
   }
 
+  private async generateCustomVideoPreview(
+    asset: ThumbnailPathEntity & { originalPath: string },
+    format: VideoFormat,
+    videoStream: VideoStreamInfo,
+    audioStream: AudioStreamInfo | undefined,
+    previewPath: string,
+    thumbnailPath: string,
+    imageConfig: any,
+    ffmpegConfig: any
+  ) {
+    const thumbnailConfig = ThumbnailConfig.create({ ...ffmpegConfig, targetResolution: imageConfig.preview.size.toString() }) as ThumbnailConfig;
+    const clips = thumbnailConfig.generateVideoPreviewClips(format.duration);
+
+    if (clips.length === 0) {
+      this.logger.warn(`No clips generated for video preview of asset ${asset.id}`);
+      // Fall back to default thumbnail generation
+      const fallbackConfig = ThumbnailConfig.create({ ...ffmpegConfig, customVideoPreview: false, targetResolution: imageConfig.preview.size.toString() });
+      const previewOptions = fallbackConfig.getCommand(TranscodeTarget.VIDEO, videoStream, audioStream, format);
+      const thumbnailOptions = fallbackConfig.getCommand(TranscodeTarget.VIDEO, videoStream, audioStream, format);
+
+      await this.mediaRepository.transcode(asset.originalPath, previewPath, previewOptions);
+      await this.mediaRepository.transcode(asset.originalPath, thumbnailPath, thumbnailOptions);
+      return;
+    }
+
+    // Create proper paths for video preview generation
+    const previewDir = previewPath.substring(0, previewPath.lastIndexOf('/'));
+    const previewBaseName = previewPath.substring(previewPath.lastIndexOf('/') + 1, previewPath.lastIndexOf('.'));
+    const videoPreviewPath = `${previewDir}/${previewBaseName}.mp4`;
+
+    // Generate individual clips
+    const tempClipPaths: string[] = [];
+    const concatListEntries: string[] = [];
+
+    try {
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        const clipPath = `${previewDir}/${previewBaseName}_clip_${i}.mp4`;
+        tempClipPaths.push(clipPath);
+
+        // Create command for individual clip
+        const clipCommand = {
+          inputOptions: [`-ss ${clip.startTime}`, '-sws_flags accurate_rnd+full_chroma_int'],
+          outputOptions: [
+            `-t ${clip.length}`,
+            '-c:v libx264',
+            '-preset fast',
+            '-crf 28',
+            '-an', // Remove audio for clips
+            `-vf scale=${imageConfig.preview.size}:${imageConfig.preview.size}:force_original_aspect_ratio=decrease,pad=${imageConfig.preview.size}:${imageConfig.preview.size}:-1:-1:color=black`,
+            '-v verbose'
+          ],
+          twoPass: false,
+          progress: { frameCount: videoStream.frameCount, percentInterval: 5 }
+        };
+
+        await this.mediaRepository.transcode(asset.originalPath, clipPath, clipCommand);
+        // Use relative path for concat file
+        const clipFileName = `${previewBaseName}_clip_${i}.mp4`;
+        concatListEntries.push(`file '${clipFileName}'`);
+      }
+
+      // Create concat file
+      const concatFilePath = `${previewDir}/${previewBaseName}_concat.txt`;
+      await this.storageRepository.createOrOverwriteFile(concatFilePath, Buffer.from(concatListEntries.join('\n')));
+
+      // Concatenate clips into preview video
+      const concatCommand = {
+        inputOptions: ['-f concat', '-safe 0'],
+        outputOptions: ['-c copy', '-v verbose'],
+        twoPass: false,
+        progress: { frameCount: videoStream.frameCount * clips.length, percentInterval: 5 }
+      };
+
+      await this.mediaRepository.transcode(concatFilePath, videoPreviewPath, concatCommand);
+
+      // Generate image preview from the middle of the video preview
+      const imagePreviewCommand = {
+        inputOptions: [`-ss ${(clips.length * ffmpegConfig.previewSceneLength) / 2}`, '-sws_flags accurate_rnd+full_chroma_int'],
+        outputOptions: [
+          '-frames:v 1',
+          '-update 1',
+          `-vf thumbnail,scale=${imageConfig.preview.size}:${imageConfig.preview.size}:force_original_aspect_ratio=decrease,pad=${imageConfig.preview.size}:${imageConfig.preview.size}:-1:-1:color=black`,
+          '-v verbose'
+        ],
+        twoPass: false,
+        progress: { frameCount: 1, percentInterval: 5 }
+      };
+
+      await this.mediaRepository.transcode(videoPreviewPath, previewPath, imagePreviewCommand);
+
+      // Generate thumbnail from the video preview
+      const thumbnailCommand = {
+        inputOptions: [`-ss ${(clips.length * ffmpegConfig.previewSceneLength) / 2}`, '-sws_flags accurate_rnd+full_chroma_int'],
+        outputOptions: [
+          '-frames:v 1',
+          '-update 1',
+          `-vf thumbnail,scale=${imageConfig.thumbnail.size}:${imageConfig.thumbnail.size}:force_original_aspect_ratio=decrease,pad=${imageConfig.thumbnail.size}:${imageConfig.thumbnail.size}:-1:-1:color=black`,
+          '-v verbose'
+        ],
+        twoPass: false,
+        progress: { frameCount: 1, percentInterval: 5 }
+      };
+
+      await this.mediaRepository.transcode(videoPreviewPath, thumbnailPath, thumbnailCommand);
+
+      // Clean up temporary files
+      await this.storageRepository.unlink(concatFilePath);
+      for (const clipPath of tempClipPaths) {
+        await this.storageRepository.unlink(clipPath);
+      }
+      // Keep the video preview file as it might be useful for the frontend
+
+    } catch (error) {
+      this.logger.error(`Error generating custom video preview for asset ${asset.id}:`, error);
+
+      // Clean up temporary files on error
+      try {
+        const previewDir = previewPath.substring(0, previewPath.lastIndexOf('/'));
+        const previewBaseName = previewPath.substring(previewPath.lastIndexOf('/') + 1, previewPath.lastIndexOf('.'));
+        const concatFilePath = `${previewDir}/${previewBaseName}_concat.txt`;
+        await this.storageRepository.unlink(concatFilePath);
+        for (const clipPath of tempClipPaths) {
+          await this.storageRepository.unlink(clipPath);
+        }
+      } catch (cleanupError) {
+        this.logger.warn(`Error cleaning up temporary files:`, cleanupError);
+      }
+
+      throw error;
+    }
+  }
+
   @OnJob({ name: JobName.AssetEncodeVideoQueueAll, queue: QueueName.VideoConversion })
   async handleQueueVideoConversion(job: JobOf<JobName.AssetEncodeVideoQueueAll>): Promise<JobStatus> {
+
     const { force } = job;
 
     let queue: { name: JobName.AssetEncodeVideo; data: { id: string } }[] = [];
@@ -546,7 +686,7 @@ export class MediaService extends BaseService {
     return JobStatus.Success;
   }
 
-  private getMainStream<T extends VideoStreamInfo | AudioStreamInfo>(streams: T[]): T {
+  private getMainStream<T extends VideoStreamInfo | AudioStreamInfo>(streams: T[]): T | undefined {
     return streams
       .filter((stream) => stream.codecName !== 'unknown')
       .sort((stream1, stream2) => stream2.bitrate - stream1.bitrate)[0];

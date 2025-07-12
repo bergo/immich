@@ -144,6 +144,36 @@ export class SystemConfigFFmpegDto {
 
   @ValidateEnum({ enum: ToneMapping, name: 'ToneMapping' })
   tonemap!: ToneMapping;
+
+  @ValidateBoolean()
+  customVideoPreview!: boolean;
+
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  @Type(() => Number)
+  @ApiProperty({ type: 'number' })
+  previewTimeOffset!: number;
+
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  @ApiProperty({ type: 'integer' })
+  previewBufferSeconds!: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  @Type(() => Number)
+  @ApiProperty({ type: 'integer' })
+  previewScenes!: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  @Type(() => Number)
+  @ApiProperty({ type: 'integer' })
+  previewSceneLength!: number;
 }
 
 class JobSettingsDto {

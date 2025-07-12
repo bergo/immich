@@ -372,6 +372,67 @@
         </SettingAccordion>
 
         <SettingAccordion
+          key="video-preview-options"
+          title={$t('admin.video_preview_settings')}
+          subtitle={$t('admin.video_preview_settings_description')}
+        >
+          <div class="ms-4 mt-4 flex flex-col gap-4">
+            <SettingSwitch
+              title={$t('admin.video_preview_enabled')}
+              {disabled}
+              subtitle={$t('admin.video_preview_enabled_description')}
+              bind:checked={config.ffmpeg.customVideoPreview}
+              isEdited={config.ffmpeg.customVideoPreview !== savedConfig.ffmpeg.customVideoPreview}
+            />
+
+            <SettingInputField
+              inputType={SettingInputFieldType.NUMBER}
+              label={$t('admin.video_preview_time_offset')}
+              description={$t('admin.video_preview_time_offset_description')}
+              bind:value={config.ffmpeg.previewTimeOffset}
+              isEdited={config.ffmpeg.previewTimeOffset !== savedConfig.ffmpeg.previewTimeOffset}
+              {disabled}
+              step="0.1"
+              min="0"
+              max="1"
+            />
+
+            <SettingInputField
+              inputType={SettingInputFieldType.NUMBER}
+              label={$t('admin.video_preview_buffer_seconds')}
+              description={$t('admin.video_preview_buffer_seconds_description')}
+              bind:value={config.ffmpeg.previewBufferSeconds}
+              isEdited={config.ffmpeg.previewBufferSeconds !== savedConfig.ffmpeg.previewBufferSeconds}
+              {disabled}
+              min="1"
+              max="60"
+            />
+
+            <SettingInputField
+              inputType={SettingInputFieldType.NUMBER}
+              label={$t('admin.video_preview_scenes')}
+              description={$t('admin.video_preview_scenes_description')}
+              bind:value={config.ffmpeg.previewScenes}
+              isEdited={config.ffmpeg.previewScenes !== savedConfig.ffmpeg.previewScenes}
+              {disabled}
+              min="1"
+              max="20"
+            />
+
+            <SettingInputField
+              inputType={SettingInputFieldType.NUMBER}
+              label={$t('admin.video_preview_scene_length')}
+              description={$t('admin.video_preview_scene_length_description')}
+              bind:value={config.ffmpeg.previewSceneLength}
+              isEdited={config.ffmpeg.previewSceneLength !== savedConfig.ffmpeg.previewSceneLength}
+              {disabled}
+              min="1"
+              max="10"
+            />
+          </div>
+        </SettingAccordion>
+
+        <SettingAccordion
           key="advanced-options"
           title={$t('advanced')}
           subtitle={$t('admin.transcoding_advanced_options_description')}

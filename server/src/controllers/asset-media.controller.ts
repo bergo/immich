@@ -167,6 +167,18 @@ export class AssetMediaController {
     await sendFile(res, next, () => this.service.playbackVideo(auth, id), this.logger);
   }
 
+  @Get(':id/video/preview')
+  @FileResponse()
+  @Authenticated({ sharedLink: true })
+  async playAssetVideoPreview(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Res() res: Response,
+    @Next() next: NextFunction,
+  ) {
+    await sendFile(res, next, () => this.service.playbackVideoPreview(auth, id), this.logger);
+  }
+
   /**
    * Checks if multiple assets exist on the server and returns all existing - used by background backup
    */

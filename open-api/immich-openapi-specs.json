@@ -2415,6 +2415,57 @@
         "description": "This endpoint requires the `asset.view` permission."
       }
     },
+    "/assets/{id}/video/preview": {
+      "get": {
+        "operationId": "playAssetVideoPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "Assets"
+        ]
+      }
+    },
     "/auth/admin-sign-up": {
       "post": {
         "operationId": "signUpAdmin",
@@ -15544,6 +15595,9 @@
             "minimum": 0,
             "type": "integer"
           },
+          "customVideoPreview": {
+            "type": "boolean"
+          },
           "gopSize": {
             "minimum": 0,
             "type": "integer"
@@ -15556,6 +15610,25 @@
           },
           "preset": {
             "type": "string"
+          },
+          "previewBufferSeconds": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "previewSceneLength": {
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "previewScenes": {
+            "maximum": 20,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "previewTimeOffset": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
           },
           "refs": {
             "maximum": 6,
@@ -15613,10 +15686,15 @@
           "bframes",
           "cqMode",
           "crf",
+          "customVideoPreview",
           "gopSize",
           "maxBitrate",
           "preferredHwDevice",
           "preset",
+          "previewBufferSeconds",
+          "previewSceneLength",
+          "previewScenes",
+          "previewTimeOffset",
           "refs",
           "targetAudioCodec",
           "targetResolution",

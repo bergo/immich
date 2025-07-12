@@ -141,7 +141,7 @@ export interface VideoCodecSWConfig {
   getCommand(
     target: TranscodeTarget,
     videoStream: VideoStreamInfo,
-    audioStream: AudioStreamInfo,
+    audioStream?: AudioStreamInfo,
     format?: VideoFormat,
   ): TranscodeCommand;
 }

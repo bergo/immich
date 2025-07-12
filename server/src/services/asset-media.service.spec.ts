@@ -659,6 +659,71 @@ describe(AssetMediaService.name, () => {
         }),
       );
     });
+
+    it('should always serve original video for playbackVideo', async () => {
+      mocks.access.asset.checkOwnerAccess.mockResolvedValue(new Set([assetStub.video.id]));
+      mocks.asset.getById.mockResolvedValue(assetStub.video);
+
+      await expect(sut.playbackVideo(authStub.admin, assetStub.video.id)).resolves.toEqual(
+        new ImmichFileResponse({
+          path: assetStub.video.originalPath,
+          cacheControl: CacheControl.PRIVATE_WITH_CACHE,
+          contentType: 'application/octet-stream',
+        }),
+      );
+    });
+
+    it('should serve video preview when custom video preview is enabled and file exists', async () => {
+      mocks.access.asset.checkOwnerAccess.mockResolvedValue(new Set([assetStub.video.id]));
+      mocks.asset.getById.mockResolvedValue(assetStub.video);
+      mocks.systemMetadata.get.mockResolvedValue({
+        ffmpeg: { customVideoPreview: true },
+        image: { preview: { format: 'jpeg' } }
+      });
+      mocks.storage.checkFileExists.mockResolvedValue(true);
+
+      const result = await sut.playbackVideoPreview(authStub.admin, assetStub.video.id);
+
+      expect(result).toBeInstanceOf(ImmichFileResponse);
+      expect(result.path).toContain('-preview.mp4');
+      expect(result.contentType).toBe('video/mp4');
+      expect(result.cacheControl).toBe(CacheControl.PRIVATE_WITH_CACHE);
+    });
+
+    it('should fall back to original when custom video preview is enabled but file does not exist', async () => {
+      mocks.access.asset.checkOwnerAccess.mockResolvedValue(new Set([assetStub.video.id]));
+      mocks.asset.getById.mockResolvedValue(assetStub.video);
+      mocks.systemMetadata.get.mockResolvedValue({
+        ffmpeg: { customVideoPreview: true },
+        image: { preview: { format: 'jpeg' } }
+      });
+      mocks.storage.checkFileExists.mockResolvedValue(false);
+
+      await expect(sut.playbackVideoPreview(authStub.admin, assetStub.video.id)).resolves.toEqual(
+        new ImmichFileResponse({
+          path: assetStub.video.originalPath,
+          cacheControl: CacheControl.PRIVATE_WITH_CACHE,
+          contentType: 'application/octet-stream',
+        }),
+      );
+    });
+
+    it('should fall back to original when custom video preview is disabled', async () => {
+      mocks.access.asset.checkOwnerAccess.mockResolvedValue(new Set([assetStub.video.id]));
+      mocks.asset.getById.mockResolvedValue(assetStub.video);
+      mocks.systemMetadata.get.mockResolvedValue({
+        ffmpeg: { customVideoPreview: false },
+        image: { preview: { format: 'jpeg' } }
+      });
+
+      await expect(sut.playbackVideoPreview(authStub.admin, assetStub.video.id)).resolves.toEqual(
+        new ImmichFileResponse({
+          path: assetStub.video.originalPath,
+          cacheControl: CacheControl.PRIVATE_WITH_CACHE,
+          contentType: 'application/octet-stream',
+        }),
+      );
+    });
   });
 
   describe('checkExistingAssets', () => {

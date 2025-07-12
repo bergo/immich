@@ -45,6 +45,11 @@ export interface SystemConfig {
     accel: TranscodeHardwareAcceleration;
     accelDecode: boolean;
     tonemap: ToneMapping;
+    customVideoPreview: boolean;
+    previewTimeOffset: number;
+    previewBufferSeconds: number;
+    previewScenes: number;
+    previewSceneLength: number;
   };
   job: Record<ConcurrentQueueName, { concurrency: number }>;
   logging: {
@@ -206,6 +211,11 @@ export const defaults = Object.freeze<SystemConfig>({
     tonemap: ToneMapping.Hable,
     accel: TranscodeHardwareAcceleration.Disabled,
     accelDecode: false,
+    customVideoPreview: true,
+    previewTimeOffset: 0.1,
+    previewBufferSeconds: 20,
+    previewScenes: 10,
+    previewSceneLength: 2,
   },
   job: {
     [QueueName.BackgroundTask]: { concurrency: 5 },

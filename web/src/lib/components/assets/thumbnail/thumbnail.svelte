@@ -2,7 +2,7 @@
   import Icon from '$lib/components/elements/icon.svelte';
   import { ProjectionType } from '$lib/constants';
   import { locale, playVideoThumbnailOnHover } from '$lib/stores/preferences.store';
-  import { getAssetPlaybackUrl, getAssetThumbnailUrl } from '$lib/utils';
+  import { getAssetPlaybackUrl, getAssetThumbnailUrl, getAssetVideoPreviewUrl } from '$lib/utils';
   import { timeToSeconds } from '$lib/utils/date-time';
   import { getAltText } from '$lib/utils/thumbnail-util';
   import { AssetMediaSize, AssetVisibility } from '@immich/sdk';
@@ -323,7 +323,7 @@
       {#if asset.isVideo}
         <div class="absolute top-0 h-full w-full">
           <VideoThumbnail
-            url={getAssetPlaybackUrl({ id: asset.id, cacheKey: asset.thumbhash })}
+            url={getAssetVideoPreviewUrl({ id: asset.id, cacheKey: asset.thumbhash })}
             enablePlayback={mouseOver && $playVideoThumbnailOnHover}
             curve={selected}
             durationInSeconds={asset.duration ? timeToSeconds(asset.duration) : 0}
@@ -333,7 +333,7 @@
       {:else if asset.isImage && asset.livePhotoVideoId}
         <div class="absolute top-0 h-full w-full">
           <VideoThumbnail
-            url={getAssetPlaybackUrl({ id: asset.livePhotoVideoId, cacheKey: asset.thumbhash })}
+            url={getAssetVideoPreviewUrl({ id: asset.livePhotoVideoId, cacheKey: asset.thumbhash })}
             enablePlayback={mouseOver && $playVideoThumbnailOnHover}
             pauseIcon={mdiMotionPauseOutline}
             playIcon={mdiMotionPlayOutline}

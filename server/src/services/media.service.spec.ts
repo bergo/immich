@@ -446,6 +446,35 @@ describe(MediaService.name, () => {
         }),
       );
     });
+
+    it('should use default thumbnail generation when custom video preview is disabled', async () => {
+      const videoWithDuration = {
+        ...probeStub.videoStreamHDR,
+        format: { ...probeStub.videoStreamHDR.format, duration: 100 }, // 100 second video
+      };
+      mocks.media.probe.mockResolvedValue(videoWithDuration);
+      mocks.systemMetadata.get.mockResolvedValue({
+        ffmpeg: {
+          customVideoPreview: false,
+        },
+      });
+      mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(assetStub.video);
+
+      await sut.handleGenerateThumbnails({ id: assetStub.video.id });
+
+      // Should use default scene-based thumbnail generation
+      expect(mocks.media.transcode).toHaveBeenCalledWith(
+        '/original/path.ext',
+        'upload/thumbs/user-id/as/se/asset-id-preview.jpeg',
+        expect.objectContaining({
+          outputOptions: expect.arrayContaining([
+            '-fps_mode vfr',
+            '-frames:v 1',
+            '-update 1',
+          ]),
+        }),
+      );
+    });
     it('should not skip intra frames for MTS file', async () => {
       mocks.media.probe.mockResolvedValue(probeStub.videoStreamMTS);
       mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(assetStub.video);

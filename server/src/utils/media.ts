@@ -390,6 +390,7 @@ export class ThumbnailConfig extends BaseConfig {
     return new ThumbnailConfig(config);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getBaseInputOptions(videoStream: VideoStreamInfo, format?: VideoFormat): string[] {
     // skip_frame nointra skips all frames for some MPEG-TS files. Look at ffmpeg tickets 7950 and 7895 for more details.
     return format?.formatName === 'mpegts'
@@ -398,10 +399,23 @@ export class ThumbnailConfig extends BaseConfig {
   }
 
   getBaseOutputOptions() {
+    // For custom video preview, we generate a video, not a single frame
+    if (this.config.customVideoPreview) {
+      return ['-fps_mode passthrough', '-c:v libx264', '-preset fast', '-crf 28'];
+    }
+
+    // Default: single frame thumbnail
     return ['-fps_mode vfr', '-frames:v 1', '-update 1'];
   }
 
   getFilterOptions(videoStream: VideoStreamInfo): string[] {
+    // For custom video preview, we don't use complex filters here
+    // The preview generation will be handled differently
+    if (this.config.customVideoPreview) {
+      return [...super.getFilterOptions(videoStream)];
+    }
+
+    // Default scene-based extraction for single frame thumbnail
     return [
       'fps=12:start_time=0:eof_action=pass:round=down',
       'thumbnail=12',
@@ -410,6 +424,40 @@ export class ThumbnailConfig extends BaseConfig {
       'reverse',
       ...super.getFilterOptions(videoStream),
     ];
+  }
+
+  // Generate video preview clips using time shift logic from video-overview-cli
+  generateVideoPreviewClips(duration: number): Array<{ startTime: number; length: number }> {
+    if (!this.config.customVideoPreview) {
+      return [];
+    }
+
+    const offset = this.config.previewTimeOffset || 0.1;
+    const bufferSeconds = this.config.previewBufferSeconds || 20;
+    const numScenes = this.config.previewScenes || 10;
+    const sceneLength = this.config.previewSceneLength || 2;
+
+    // Calculate interval between clips (similar to video-overview-cli logic)
+    const availableDuration = Math.max(0, duration - bufferSeconds);
+    const interval = Math.max(1, Math.floor((availableDuration - (offset * duration)) / (numScenes - 1)));
+
+    const clips: Array<{ startTime: number; length: number }> = [];
+
+    for (let i = 0; i < numScenes; i++) {
+      const startTime = Math.min(
+        offset * duration + (i * interval),
+        availableDuration - sceneLength
+      );
+
+      if (startTime >= 0 && startTime < duration - sceneLength) {
+        clips.push({
+          startTime: Math.max(0, startTime),
+          length: Math.min(sceneLength, duration - startTime)
+        });
+      }
+    }
+
+    return clips;
   }
 
   getPresetOptions() {
